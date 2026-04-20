@@ -43,6 +43,7 @@ from mutagen.id3 import PictureType
 import base64
 from PIL import Image
 import yt_dlp
+import psutil
 
 # Conditional imports for torch and RVC
 try:
@@ -58,6 +59,21 @@ except ImportError:
     rvc_available = False
 
 rvc_functionality_available = torch_available and rvc_available
+
+# Conditional imports for Piper TTS
+try:
+    from piper.voice import PiperVoice
+    piper_available = True
+except ImportError:
+    piper_available = False
+
+# Conditional imports for Kokoro TTS
+try:
+    from kokoro import KPipeline
+    import soundfile as sf
+    kokoro_available = True
+except ImportError:
+    kokoro_available = False
 
 silero_languages = [
     {"name": "German (v3)", "code": "v3_de.pt"},
@@ -574,9 +590,10 @@ class TextPreprocessor:
 
 
 class TTSOptimizerGUI:
-    def __init__(self, master):
+    def __init__(self, master, dry_run=False):
         self.master = master
-        master.title("Pandrator")
+        self.dry_run = dry_run
+        master.title("Pandrator" + (" [DRY-RUN MODE]" if dry_run else ""))
         ctk.set_appearance_mode("dark")  # Set the appearance mode to dark
         self.timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -769,6 +786,103 @@ class TTSOptimizerGUI:
                                                   self.remove_diacritics, self.disable_paragraph_detection, self.tts_service)
         self.initialize_rvc()
 
+    def detect_device_info(self):
+        """Detect and return device information for preset recommendations"""
+        try:
+            # Detect CPU architecture
+            machine = platform.machine().lower()
+            processor = platform.processor().lower()
+
+            # Check for Apple Silicon
+            is_apple_silicon = machine in ['arm64', 'aarch64'] or 'apple' in processor
+
+            # Check for CUDA availability
+            has_cuda = torch_available and torch.cuda.is_available()
+
+            # Get CPU and RAM info
+            cpu_count = psutil.cpu_count(logical=False)
+            ram_gb = round(psutil.virtual_memory().total / (1024**3))
+
+            if is_apple_silicon:
+                chip_name = "M1/M2/M3" if 'arm' in machine else "Apple Silicon"
+                return f"🍎 Detected: {chip_name} Mac | {cpu_count} cores | {ram_gb}GB RAM | Recommended: M1 presets"
+            elif has_cuda:
+                gpu_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CUDA GPU"
+                return f"⚡ Detected: {gpu_name} | {cpu_count} cores | {ram_gb}GB RAM | Recommended: High-End GPU preset"
+            else:
+                return f"💻 Detected: Intel/AMD CPU | {cpu_count} cores | {ram_gb}GB RAM | Recommended: Low-Power preset"
+        except Exception as e:
+            logging.warning(f"Could not detect device info: {e}")
+            return "💻 Device detection unavailable | All presets available"
+
+    def apply_preset(self, preset_name):
+        """Apply a device-optimized preset configuration"""
+        try:
+            # Load presets from JSON file
+            presets_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "presets.json")
+            with open(presets_file, 'r') as f:
+                presets_data = json.load(f)
+
+            if preset_name not in presets_data["presets"]:
+                CTkMessagebox(title="Error", message=f"Preset '{preset_name}' not found!", icon="cancel")
+                return
+
+            preset = presets_data["presets"][preset_name]
+            settings = preset["settings"]
+
+            # Show confirmation dialog with preset details
+            message = f"{preset['name']}\n\n"
+            message += f"Description: {preset['description']}\n\n"
+            message += f"Estimated Time: {preset['estimated_time']}\n\n"
+            message += f"Notes: {preset['notes']}\n\n"
+            message += "Apply this preset?"
+
+            result = CTkMessagebox(title="Apply Preset", message=message, icon="question", option_1="Cancel", option_2="Apply")
+
+            if result.get() != "Apply":
+                return
+
+            # Apply settings
+            logging.info(f"Applying preset: {preset_name}")
+
+            # Set TTS service
+            tts_service = settings.get("tts_service", "XTTS")
+            if tts_service == "Piper" and not piper_available:
+                CTkMessagebox(title="Warning", message="Piper TTS is not installed. Install it with: pip install piper-tts", icon="warning")
+                return
+            elif tts_service == "Kokoro" and not kokoro_available:
+                CTkMessagebox(title="Warning", message="Kokoro TTS is not installed. Install it with: pip install kokoro soundfile", icon="warning")
+                return
+
+            self.tts_service.set(tts_service)
+
+            # Set speed
+            self.xtts_speed.set(settings.get("speed", 1.0))
+
+            # Set RVC
+            self.enable_rvc.set(settings.get("enable_rvc", False))
+
+            # Set TTS evaluation
+            self.enable_tts_evaluation.set(settings.get("enable_tts_evaluation", False))
+
+            # Set max attempts
+            self.max_attempts.set(settings.get("max_attempts", 1))
+
+            # Update UI
+            self.update_tts_service()
+
+            # Show success message
+            CTkMessagebox(title="Preset Applied", message=f"✅ {preset['name']} preset has been applied successfully!", icon="check")
+
+            logging.info(f"Preset {preset_name} applied successfully")
+
+        except FileNotFoundError:
+            CTkMessagebox(title="Error", message="presets.json file not found!", icon="cancel")
+            logging.error("presets.json file not found")
+        except Exception as e:
+            CTkMessagebox(title="Error", message=f"Failed to apply preset: {str(e)}", icon="cancel")
+            logging.error(f"Failed to apply preset {preset_name}: {e}")
+
     def create_session_tab(self):
         self.session_tab = self.tabview.add("Session")
         self.session_tab.grid_columnconfigure(0, weight=1, uniform="session_columns")
@@ -826,7 +940,15 @@ class TTSOptimizerGUI:
         session_settings_frame.grid_columnconfigure(3, weight=1)
 
         ctk.CTkLabel(session_settings_frame, text="TTS Service:").grid(row=2, column=0, padx=10, pady=5, sticky=tk.W)
-        self.tts_service_dropdown = ctk.CTkOptionMenu(session_settings_frame, variable=self.tts_service, values=["XTTS", "Silero"], command=self.update_tts_service)
+
+        # Build available TTS services list
+        tts_services = ["XTTS", "Silero"]
+        if piper_available:
+            tts_services.append("Piper")
+        if kokoro_available:
+            tts_services.append("Kokoro")
+
+        self.tts_service_dropdown = ctk.CTkOptionMenu(session_settings_frame, variable=self.tts_service, values=tts_services, command=self.update_tts_service)
         self.tts_service_dropdown.grid(row=2, column=1, padx=10, pady=5, sticky=tk.EW)
         
         self.xtts_model = ctk.StringVar(value="")
@@ -878,6 +1000,24 @@ class TTSOptimizerGUI:
         self.advanced_settings_switch.grid(row=9, column=0, padx=5, pady=5, sticky=tk.W)
 
         self.create_xtts_advanced_settings_frame()
+
+        # Device Presets Section
+        ctk.CTkLabel(self.session_tab, text="Device Presets (Quick Setup)", font=ctk.CTkFont(size=14, weight="bold")).grid(row=6, column=0, columnspan=4, padx=10, pady=(20, 10), sticky=tk.W)
+
+        presets_frame = ctk.CTkFrame(self.session_tab, fg_color="gray20", corner_radius=10)
+        presets_frame.grid(row=6, column=0, columnspan=4, padx=10, pady=(0, 20), sticky=tk.EW)
+        presets_frame.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
+
+        # Add preset buttons
+        ctk.CTkButton(presets_frame, text="🍎 M1 Fast (Piper)", command=lambda: self.apply_preset("m1_fast"), fg_color="#2e8b57", hover_color="#3cb371").grid(row=0, column=0, padx=5, pady=10, sticky=tk.EW)
+        ctk.CTkButton(presets_frame, text="🍎 M1 Quality (Kokoro)", command=lambda: self.apply_preset("m1_quality"), fg_color="#4169e1", hover_color="#5a7fed").grid(row=0, column=1, padx=5, pady=10, sticky=tk.EW)
+        ctk.CTkButton(presets_frame, text="🍎 M1 Balanced (XTTS)", command=lambda: self.apply_preset("m1_balanced"), fg_color="#9370db", hover_color="#a384e8").grid(row=0, column=2, padx=5, pady=10, sticky=tk.EW)
+        ctk.CTkButton(presets_frame, text="⚡ High-End GPU", command=lambda: self.apply_preset("high_end_gpu"), fg_color="#ff6347", hover_color="#ff7f5c").grid(row=0, column=3, padx=5, pady=10, sticky=tk.EW)
+        ctk.CTkButton(presets_frame, text="🔋 Low-Power", command=lambda: self.apply_preset("low_power"), fg_color="#708090", hover_color="#808892").grid(row=0, column=4, padx=5, pady=10, sticky=tk.EW)
+
+        # Add device info label
+        self.device_info_label = ctk.CTkLabel(presets_frame, text=self.detect_device_info(), font=ctk.CTkFont(size=11), text_color="gray70")
+        self.device_info_label.grid(row=1, column=0, columnspan=5, padx=10, pady=(0, 10), sticky=tk.W)
 
         # Dubbing Section
         self.dubbing_frame = ctk.CTkFrame(self.session_tab, fg_color="gray20", corner_radius=10)
@@ -4714,15 +4854,71 @@ class TTSOptimizerGUI:
                     messagebox.showerror("Error", "Failed to connect to the Silero API.")
                     
     def tts_to_audio(self, text):
+        # Dry-run mode: simulate TTS without actually generating audio
+        if self.dry_run:
+            logging.info(f"[DRY-RUN] Would generate TTS for: '{text[:100]}{'...' if len(text) > 100 else ''}'")
+            logging.info(f"[DRY-RUN] TTS Service: {self.tts_service.get()}")
+            if self.tts_service.get() == "XTTS":
+                logging.info(f"[DRY-RUN] Language: {self.language_dropdown.get()}")
+                logging.info(f"[DRY-RUN] Speaker: {self.selected_speaker.get()}")
+            elif self.tts_service.get() == "Silero":
+                logging.info(f"[DRY-RUN] Language: {self.silero_language_dropdown.get()}")
+                logging.info(f"[DRY-RUN] Speaker: {self.silero_speaker_dropdown.get()}")
+            elif self.tts_service.get() in ["Piper", "Kokoro"]:
+                logging.info(f"[DRY-RUN] Using M1-optimized TTS: {self.tts_service.get()}")
+            # Return a silent 1-second audio segment for preview purposes
+            return AudioSegment.silent(duration=1000)
+
         best_audio = None
         best_mos = -1
-        if self.tts_service.get() == "XTTS":
+
+        # Piper TTS
+        if self.tts_service.get() == "Piper":
+            try:
+                # Use Piper API server endpoint
+                data = {"text": text, "speaker": self.selected_speaker.get()}
+                response = requests.post("http://localhost:8002/tts", json=data)
+                if response.status_code == 200:
+                    audio_data = io.BytesIO(response.content)
+                    return AudioSegment.from_file(audio_data, format="wav")
+                else:
+                    logging.error(f"Piper TTS error: {response.status_code}")
+                    return None
+            except Exception as e:
+                logging.error(f"Error in Piper TTS: {str(e)}")
+                CTkMessagebox(title="Error", message=f"Piper TTS failed. Make sure Piper server is running on port 8002.\nError: {str(e)}", icon="cancel")
+                return None
+
+        # Kokoro TTS
+        elif self.tts_service.get() == "Kokoro":
+            try:
+                # Use Kokoro API server endpoint (OpenAI-compatible)
+                data = {
+                    "model": "kokoro",
+                    "voice": self.selected_speaker.get() or "af_bella",
+                    "input": text,
+                    "response_format": "wav"
+                }
+                response = requests.post("http://localhost:8003/v1/audio/speech", json=data)
+                if response.status_code == 200:
+                    audio_data = io.BytesIO(response.content)
+                    return AudioSegment.from_file(audio_data, format="wav")
+                else:
+                    logging.error(f"Kokoro TTS error: {response.status_code}")
+                    return None
+            except Exception as e:
+                logging.error(f"Error in Kokoro TTS: {str(e)}")
+                CTkMessagebox(title="Error", message=f"Kokoro TTS failed. Make sure Kokoro server is running on port 8003.\nError: {str(e)}", icon="cancel")
+                return None
+
+        # XTTS
+        elif self.tts_service.get() == "XTTS":
             language = self.language_dropdown.get()
             speaker = self.selected_speaker.get()
-            
+
             #if language != "en":
             #text = text.rstrip('.')
-            
+
             speaker_path = os.path.join(self.tts_voices_folder, speaker)
             if os.path.isfile(speaker_path):
                 speaker_arg = speaker
@@ -5791,6 +5987,7 @@ def main():
     parser.add_argument("-connect", action="store_true", help="Connect to a TTS service on launch")
     parser.add_argument("-xtts", action="store_true", help="Connect to XTTS")
     parser.add_argument("-silero", action="store_true", help="Connect to Silero")
+    parser.add_argument("--dry-run", action="store_true", help="Preview what would happen without executing TTS generation")
     args = parser.parse_args()
     
     logging.info(f"Command line arguments: {args}")
@@ -5801,8 +5998,11 @@ def main():
     except tk.TclError as e:
         logging.warning(f"Icon file 'pandrator.ico' not found. Proceeding without setting the window icon. Error: {str(e)}")
 
-    gui = TTSOptimizerGUI(root)
+    gui = TTSOptimizerGUI(root, dry_run=args.dry_run)
     logging.info("GUI initialized")
+
+    if args.dry_run:
+        logging.info("DRY-RUN MODE ENABLED - No actual TTS generation will occur")
 
     if args.connect:
         if args.xtts:

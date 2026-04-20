@@ -5,8 +5,9 @@
 # Pandrator: a multilingual GUI audiobook, subtitle and dubbing generator with voice cloning and translation
 >[!TIP]
 >**TL;DR:**
-> - Pandrator is not an AI model itself, but a GUI framework for Text-to-Speech, subtitle generation and translation projects. It can generate audiobooks and subtitles/dubbing by leveraging several AI tools, custom workflows and algorithms. It works on Windows out of the box. It does work on Linux, but you have to perform a manual installation at the moment.
-> - The easiest way to use it is to download one of the precompiled **[archives](https://1drv.ms/f/s!AgSiDu9lV3iMnPFKPO5BB_c72OLjtQ?e=3fRZMG)** - simply unpack them and use the included launcher. See **[this table](#self-contained-packages)** for their contents and sizes.
+> - Pandrator is not an AI model itself, but a GUI framework for Text-to-Speech, subtitle generation and translation projects. It can generate audiobooks and subtitles/dubbing by leveraging several AI tools, custom workflows and algorithms. It works on Windows out of the box (precompiled packages available). On macOS and Linux, you need to perform a manual installation.
+> - **Windows users:** Download one of the precompiled **[archives](https://1drv.ms/f/s!AgSiDu9lV3iMnPFKPO5BB_c72OLjtQ?e=3fRZMG)** - simply unpack them and use the included launcher. See **[this table](#self-contained-packages)** for their contents and sizes.
+> - **macOS/Linux users:** Follow the [Manual Installation](#manual-installation-macos--linux) instructions below.
 > - You can talk to me or share tips/workflows/ideas on the Discord server.
 >
 > [![](https://dcbadge.limes.pink/api/server/JZzHv3MnaV)](https://discord.gg/https://discord.gg/JZzHv3MnaV)
@@ -128,20 +129,37 @@ For additional functionality not yet included in the installer:
 
 Please refer to the repositories linked under [Dependencies](#Dependencies) for detailed installation instructions. Remember that the API servers (XTTS, Silero) must be running to make use of the functionalities they offer.
 
-### Manual Installation
+### Manual Installation (macOS / Linux)
 
 #### Prerequisites
 
 - Git
 - Miniconda or Anaconda
-- Microsoft Visual C++ Build Tools
 - Calibre
+- Xcode Command Line Tools (macOS only)
 
 #### Installation Steps
 
 1. Install dependencies:
+
+   **macOS:**
+   ```bash
+   # Install Homebrew if not already installed
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+   # Install Calibre
+   brew install --cask calibre
+
+   # Install Xcode Command Line Tools
+   xcode-select --install
+   ```
+
+   **Linux:**
+   - Calibre: Download and install from [https://calibre-ebook.com/download_linux](https://calibre-ebook.com/download_linux)
+
+   **Windows:**
    - Calibre: Download and install from [https://calibre-ebook.com/download_windows](https://calibre-ebook.com/download_windows)
-   - Microsoft Visual C++ Build Tools: 
+   - Microsoft Visual C++ Build Tools:
      ```
      winget install --id Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended" --accept-package-agreements --accept-source-agreements
      ```
@@ -170,12 +188,18 @@ Please refer to the repositories linked under [Dependencies](#Dependencies) for 
    ```
 
 5. (Optional) Install XTTS:
-   ```
+   ```bash
    git clone https://github.com/daswer123/xtts-api-server.git
    conda create -n xtts_api_server_installer python=3.10 -y
    conda activate xtts_api_server_installer
-   pip install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --extra-index-url https://download.pytorch.org/whl/cu118
+
+   # For macOS (CPU or MPS - Metal Performance Shaders for Apple Silicon)
+   pip install torch torchaudio
    pip install xtts-api-server
+
+   # For Linux with NVIDIA GPU
+   # pip install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --extra-index-url https://download.pytorch.org/whl/cu118
+   # pip install xtts-api-server
    ```
 
 6. (Optional) Install Silero:
@@ -186,59 +210,132 @@ Please refer to the repositories linked under [Dependencies](#Dependencies) for 
    ```
 
 7. (Optional) Install RVC (Retrieval-based Voice Conversion):
-   ```
+   ```bash
    conda activate pandrator_installer
    pip install pip==24
    pip install rvc-python
-   pip install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --index-url https://download.pytorch.org/whl/cu118
+
+   # For macOS
+   pip install torch torchaudio
+
+   # For Linux with NVIDIA GPU
+   # pip install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --index-url https://download.pytorch.org/whl/cu118
    ```
 
 8. (Optional) Install WhisperX:
-   ```
+   ```bash
    conda create -n whisperx_installer python=3.10 -y
    conda activate whisperx_installer
    conda install git -c conda-forge -y
-   pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
-   conda install cudnn=8.9.7.29 -c conda-forge -y
+
+   # For macOS
+   pip install torch torchvision torchaudio
    conda install ffmpeg -c conda-forge -y
    pip install git+https://github.com/m-bain/whisperx.git
+
+   # For Linux with NVIDIA GPU
+   # pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
+   # conda install cudnn=8.9.7.29 -c conda-forge -y
+   # conda install ffmpeg -c conda-forge -y
+   # pip install git+https://github.com/m-bain/whisperx.git
    ```
 
 9. (Optional) Install XTTS Fine-tuning:
-   ```
+   ```bash
    git clone https://github.com/lukaszliniewicz/easy_xtts_trainer.git
    conda create -n easy_xtts_trainer python=3.10 -y
    conda activate easy_xtts_trainer
    cd easy_xtts_trainer
    pip install -r requirements.txt
-   pip install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --index-url https://download.pytorch.org/whl/cu118
+
+   # For macOS
+   pip install torch torchaudio
+
+   # For Linux with NVIDIA GPU
+   # pip install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --index-url https://download.pytorch.org/whl/cu118
+
    cd ..
    ```
 
 #### Running the Components
 
 1. Run Pandrator:
-   ```
+   ```bash
    conda activate pandrator_installer
    cd Pandrator
    python pandrator.py
    ```
 
-2. Run XTTS API Server (if installed):
+   **Command-line options:**
+   - `--dry-run` - Preview mode without actual TTS generation (useful for testing)
+   - `-connect -xtts` - Auto-connect to XTTS on startup
+   - `-connect -silero` - Auto-connect to Silero on startup
+
+   Example with dry-run mode:
+   ```bash
+   python pandrator.py --dry-run -connect -xtts
    ```
+
+   See [DRY_RUN_USAGE.md](DRY_RUN_USAGE.md) for detailed information about dry-run mode.
+
+2. Run XTTS API Server (if installed):
+   ```bash
    conda activate xtts_api_server_installer
    python -m xtts_api_server
    ```
    Additional options:
-   - For CPU only: Add `--device cpu`
-   - For low VRAM: Add `--lowvram` (for 4GB or less)
-   - To use DeepSpeed: Add `--deepspeed`
+   - **macOS:** The server will automatically use CPU or MPS (Metal Performance Shaders on Apple Silicon)
+   - **For CPU only:** Add `--device cpu`
+   - **For low VRAM (NVIDIA GPUs):** Add `--lowvram` (for 4GB or less)
+   - **To use DeepSpeed (NVIDIA GPUs):** Add `--deepspeed`
 
 3. Run Silero API Server (if installed):
-   ```
+   ```bash
    conda activate silero_api_server_installer
    python -m silero_api_server
    ```
+
+4. **(NEW) Run Piper TTS Server (M1-optimized):**
+   ```bash
+   conda activate pandrator_installer
+   pip install piper-tts
+   # Download a Piper voice model (example for English)
+   wget https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+   wget https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json
+   # Start Piper server (requires separate server setup - see Piper documentation)
+   ```
+
+5. **(NEW) Run Kokoro TTS Server (M1-optimized):**
+   ```bash
+   conda activate pandrator_installer
+   pip install kokoro soundfile
+   # Kokoro can run directly in Pandrator or via FastAPI wrapper
+   # See: https://github.com/remsky/Kokoro-FastAPI for server setup
+   ```
+
+#### macOS-Specific Notes
+- On Apple Silicon Macs (M1/M2/M3/M4), PyTorch will automatically use the Metal Performance Shaders (MPS) backend for GPU acceleration when available
+- **NEW: M1-Optimized TTS Models!** Pandrator now includes Piper and Kokoro TTS, specifically optimized for Apple Silicon
+  - **Piper:** 3-10x faster than XTTS on M1, excellent for long audiobooks
+  - **Kokoro:** Natural-sounding voices with MPS acceleration
+  - Both models run efficiently on M1 Macs without overheating
+- XTTS will run on CPU/MPS - performance may be slower than NVIDIA GPUs but still usable
+- Silero is highly optimized for CPU and works excellently on macOS
+- Make sure to allow Python/Conda through your firewall when prompted
+
+#### Device Presets (Quick Setup)
+
+Pandrator includes **one-click device presets** for non-technical users. Simply click a preset button in the Session tab to automatically configure optimal settings for your device:
+
+| Preset | Best For | TTS Model | Est. Time (13-chapter book) | Notes |
+|--------|----------|-----------|----------------------------|-------|
+| 🍎 **M1 Fast** | M1/M2/M3 Macs | Piper | 1-3 hours | Fastest, good quality, won't overheat |
+| 🍎 **M1 Quality** | M1/M2/M3 Macs | Kokoro | 2-3 hours | Natural voices, MPS acceleration |
+| 🍎 **M1 Balanced** | M1/M2/M3 Macs | XTTS | 4-6 hours | Voice cloning, take breaks |
+| ⚡ **High-End GPU** | NVIDIA RTX GPUs | XTTS + RVC | 30min - 2 hours | Maximum quality, 8GB+ VRAM |
+| 🔋 **Low-Power** | Any device | Silero | 1-2 hours | Battery-friendly, runs anywhere |
+
+The app will auto-detect your device and recommend the best preset!
 
 #### Folder Structure
 

@@ -1,0 +1,91 @@
+{
+  "presets": {
+    "m1_fast": {
+      "name": "M1 Mac - Fast (Piper)",
+      "description": "Optimized for Apple Silicon. Best for long books (1-3 hours generation). Uses CPU-only inference with low memory usage.",
+      "settings": {
+        "tts_service": "Piper",
+        "quality": "medium",
+        "speed": 1.0,
+        "enable_rvc": false,
+        "enable_tts_evaluation": false,
+        "max_attempts": 1,
+        "device": "cpu"
+      },
+      "estimated_time": "1-3 hours for 13-chapter book",
+      "recommended_for": ["M1 Mac", "M2 Mac", "M3 Mac", "M4 Mac"],
+      "notes": "Efficient and fast. Good quality. Won't overheat your Mac."
+    },
+    "m1_quality": {
+      "name": "M1 Mac - Quality (Kokoro)",
+      "description": "Natural-sounding TTS with MPS acceleration. Balanced speed and quality for audiobooks.",
+      "settings": {
+        "tts_service": "Kokoro",
+        "quality": "high",
+        "speed": 1.0,
+        "enable_rvc": false,
+        "enable_tts_evaluation": false,
+        "max_attempts": 1,
+        "device": "mps"
+      },
+      "estimated_time": "2-3 hours for 13-chapter book",
+      "recommended_for": ["M1 Mac", "M2 Mac", "M3 Mac", "M4 Mac"],
+      "notes": "Uses Metal Performance Shaders for GPU acceleration. Very natural voice quality."
+    },
+    "m1_balanced": {
+      "name": "M1 Mac - Balanced (XTTS)",
+      "description": "XTTS with CPU/MPS optimization. Higher quality with voice cloning support.",
+      "settings": {
+        "tts_service": "XTTS",
+        "quality": "medium",
+        "speed": 1.0,
+        "enable_rvc": false,
+        "enable_tts_evaluation": false,
+        "max_attempts": 1,
+        "device": "cpu",
+        "lowvram": true
+      },
+      "estimated_time": "4-6 hours for 13-chapter book",
+      "recommended_for": ["M1 Mac", "M2 Mac", "M3 Mac", "M4 Mac"],
+      "notes": "Slower but supports voice cloning. Consider breaks for long sessions."
+    },
+    "high_end_gpu": {
+      "name": "High-End GPU (XTTS + RVC)",
+      "description": "Maximum quality with RVC enhancement and NISQA evaluation. Requires NVIDIA GPU.",
+      "settings": {
+        "tts_service": "XTTS",
+        "quality": "high",
+        "speed": 1.0,
+        "enable_rvc": true,
+        "enable_tts_evaluation": true,
+        "max_attempts": 3,
+        "device": "cuda",
+        "deepspeed": true
+      },
+      "estimated_time": "30 minutes - 2 hours for 13-chapter book",
+      "recommended_for": ["Desktop with NVIDIA RTX GPU", "Cloud GPU instances"],
+      "notes": "Best quality available. Requires 8GB+ VRAM."
+    },
+    "low_power": {
+      "name": "Low-Power Mode (Silero)",
+      "description": "Pure CPU inference with minimal resource usage. Best for battery saving.",
+      "settings": {
+        "tts_service": "Silero",
+        "quality": "medium",
+        "speed": 1.0,
+        "enable_rvc": false,
+        "enable_tts_evaluation": false,
+        "max_attempts": 1,
+        "device": "cpu"
+      },
+      "estimated_time": "1-2 hours for 13-chapter book",
+      "recommended_for": ["Any device", "Battery-powered laptops", "Background processing"],
+      "notes": "Runs on any CPU. Lower quality but very efficient."
+    }
+  },
+  "device_detection": {
+    "apple_silicon": ["arm64", "aarch64"],
+    "nvidia_gpu": ["cuda"],
+    "cpu_only": ["x86_64", "amd64", "i386"]
+  }
+}
